@@ -1,31 +1,89 @@
+"""
+INCOMPLETE. DON'T USE ME YET.
+"""
+
 from collections import Counter, defaultdict
 import csv
 from pprint import pprint
 from random import choice
 from functools import lru_cache
+from itertools import product
 
 import pandas as pd
 
+from numpy import pi as π
 import torch as th
-import torch.nn.functional as F
 from torch.autograd import Variable
-from torch.nn.parameter import Parameter
+from torch import nn
+from torch.distributions import Normal
 from torchtext.vocab import Vocab
-from torchtext import data
-from torchtext.vocab import Vocab
+from scipy.stats import poisson
 
 
-class BernoulliPointProcess(th.nn.modules.Module):
-    """docstring for BernoulliPointProcess"""
+class BigModel(th.nn.modules.Module):
+    """docstring for BigModel"""
     def __init__(self, chips: Vocab, EMBED_DIM=40):
-        super(BernoulliPointProcess, self).__init__()
+        super(BigModel, self).__init__()
         self.embeds1 = th.nn.Linear(3, EMBED_DIM)
         self.embeds2 = th.nn.Linear(EMBED_DIM, EMBED_DIM // 2)
-        # self.w = Parameter(th.zeros(len(chips), EMBED_DIM))
-        # th.nn.init.normal(self.w, std=1/(6 ** (1/2)))
+        self.λ = 100
+
+        self.dim_of_space = 3
+
+        focalizer = nn.Sequential(
+            nn.Linear(self.dim_of_space, self.dim_of_space),
+            # nn.Tanh(),
+            nn.Linear(self.dim_of_space, 1)
+            )
+
+    def step_1(self):
+        N = poisson.rvs(mu=self.λ)
+        log_likelihood = poisson.logpmf(N, mu=self.λ)
+        return N, log_likelihood
+
+    def step_2(self, N):
+        d = self.dim_of_space
+        μ̃ = th.Tensor([0])
+        eye = th.Tensor([1])
+        normal = Normal(μ̃, eye)
+        samples = [th.stack([normal.sample()
+                             for _
+                             in range(d)
+                             ])
+                   for __
+                   in range(N)
+                   ]
+        log_likelihood = sum(normal.log_prob(row).sum() for row in samples)
+        return samples, log_likelihood
+
+    def kernel(self, μ, μʹ, ρ):
+        d = self.dim_of_space
+        σ = 1
+
+        term1 = (2 * ρ) ** (d / 2)
+        term2 = (2 * π * σ**2) ** ((1 - 2*ρ) * d / 2)
+        term3 = th.exp(- (ρ) * (th.norm(μ - μʹ) ** 2) / (4 * σ**2))
+        return term1 * term2 * term3
+
+    def focalization(self, μ):
+        return th.exp(th.tanh())
+
+    def define_DPP(self, μs, ρ=None):
+        if not ρ:
+            ρ = th.Tensor([0.01])
+        N = len(μs)
+        L = th.zeros(N, N)
+        for (i, μ), (j, μʹ) in product(enumerate(μs), 2):
+            L[i, j] = self.kernel(μ, μʹ, ρ)
+        for i, μ in enumerate(μs):
+            L[i, j] += self.focalization(μ)
+        return L
 
     def forward(self, language_colors: set):
-        rgb_colors = [Variable(th.Tensor(wcs_to_rgb(color))) for color in language_colors]
+        N, log_likelihood1 = self.step_1()
+        μ, log_likelihood2 = self.step_2(N)
+        rgb_colors = [Variable(th.Tensor(wcs_to_rgb(color)))
+                      for color in language_colors]
         embeds = [self.embeds1(color) for color in rgb_colors]
         embeds = [th.nn.functional.tanh(e) for e in embeds]
         embeds = [self.embeds2(e) for e in embeds]
@@ -71,7 +129,10 @@ def read_colors():
     terms_for_language = defaultdict(set)
     with open("data/term.txt") as f:
         reader = csv.DictReader(f, delimiter="\t",
-                                fieldnames=["Language", "Speaker", "Chip", "Term"])
+                                fieldnames=["Language",
+                                            "Speaker",
+                                            "Chip",
+                                            "Term"])
         for row in reader:
             terms_for_language[row["Language"]].add(row["Term"])
 
@@ -87,6 +148,7 @@ def valid_colors(iterable):
             continue
         yield row
 
+
 def main():
     chips_for_language = defaultdict(list)
     with open("data/foci-exp.txt") as f:
@@ -98,7 +160,9 @@ def main():
                                             "Chip"])
         for row in valid_colors(reader):
             if row["Speaker"] == "1":  # Just look at one speaker.
-                chips_for_language[row["Language"], row["Response"]].append(row["Chip"])
+                chips_for_language[row["Language"],
+                                   row["Response"]
+                                   ].append(row["Chip"])
     chips_reduced = {k: choice(v) for k, v in chips_for_language.items()}
     # pprint(chips_reduced)
     vocabs_for_each_language = defaultdict(set)
@@ -114,24 +178,12 @@ def main():
     vocab = Vocab(counter)
     print(vocab.stoi)
 
-    model = BernoulliPointProcess(vocab)
+    model = BigModel(vocab)
 
     for chipset in just_chipsets:
         print([vocab.stoi[x] for x in chipset])
-    # indexes = [Variable(th.LongTensor([vocab.stoi[chip]
-    #                           for x
-    #                           in chipset
-    #                           ]
-    #                          ), requires_grad=False)
-    #            for chipset
-    #            in just_chipsets
-    #            ]
 
     train_model(model, just_chipsets)
-    # df = pd.read_table("data/term.txt", header=None,
-    #                    names=["Language", "Speaker", "Chip", "Term"],
-    #                    index_col=[0, 1, 2])
-    # print(df.head())
 
 
 if __name__ == '__main__':

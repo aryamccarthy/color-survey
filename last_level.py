@@ -56,12 +56,17 @@ def train_model(model, prot, manif, alig, *, n_iters=10, learning_rate=1e-2):
         optimizer.step()
 
 
+def assert_invertible(tensor):
+    assert not np.isclose(np.linalg.det(tensor), 0)
+
+
 if __name__ == '__main__':
+    spatial_dim = 3
     n_prototypes = 100
     n_manifestations = 20
 
-    prototypes = [mvn_rv(3) for _ in range(n_prototypes)]
-    manifestations = [mvn_rv(3) for _ in range(n_manifestations)]
+    prototypes = [mvn_rv(spatial_dim) for _ in range(n_prototypes)]
+    manifestations = [mvn_rv(spatial_dim) for _ in range(n_manifestations)]
 
     alignments = [[66, 98, 71, 83, 74, 91, 34, 15, 39, 8, 78, 77, 25, 54, 27, 95, 57, 13, 41, 73],
                   [66, 96, 71, 83, 74, 91, 35, 38, 37, 59, 21, 77, 69, 54, 24, 95, 79, 39, 41, 56],
@@ -114,7 +119,9 @@ if __name__ == '__main__':
                   [72, 24, 0, 48, 43, 75, 10, 60, 67, 26, 23, 15, 4, 85, 16, 28, 98, 11, 19, 42],
                   [83, 24, 0, 48, 7, 29, 34, 60, 67, 80, 57, 38, 4, 85, 78, 28, 98, 59, 19, 11],
                   ]
-    model = ChromemesToColors(dim=3)
+    model = ChromemesToColors(dim=spatial_dim)
     train_model(model, prototypes, manifestations, alignments)
+    assert_invertible(model.mlp[0].weight.data)
+    assert_invertible(model.mlp[-1].weight.data)
     print(model.mlp[0].weight.data)
-    print(model.mlp[2].weight.data)
+    print(model.mlp[-1].weight.data)

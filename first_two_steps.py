@@ -9,7 +9,9 @@ import math
 import torch as th
 
 #
+from itertools import product
 from pathlib import Path
+from pprint import pprint
 
 #
 from scipy.stats import poisson
@@ -151,7 +153,7 @@ def main():
     N = int(model.step1.rv()[0])
 
     μs = [model.step2.rv() for _ in range(N)]
-    print(μs)
+    pprint(μs)
 
     # TODO: sample DPP
 

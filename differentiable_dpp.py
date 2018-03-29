@@ -40,12 +40,12 @@ class DeterminantalPointProcess(Module):
         return v
 
     @property
-    def log_normalizer(self):
+    def log_normalizer(self) -> th.FloatTensor:
         log_normalizer = th.logdet(self.L + th.eye(self.N))
         return log_normalizer
 
     @property
-    def support(self):
+    def support(self) -> list:
         def powerset(iterable):
             xs = list(iterable)
             return chain.from_iterable(combinations(xs, n)
@@ -54,14 +54,14 @@ class DeterminantalPointProcess(Module):
         support = list(th.LongTensor(x) for x in powerset(items))
         return support
 
-    def supported(self, x):
+    def supported(self, x: th.LongTensor) -> bool:
         for v in self.support:
             if v.shape == x.shape and (v == x).all():
                 return True
         else:
             return False
 
-    def log_prob(self, x):
+    def log_prob(self, x: th.LongTensor) -> th.FloatTensor:
         # assert self.supported(x), f"You can't draw that from this DPP: {x}"
         if len(x) == 0:
             logdet = th.log(th.Tensor([1]))
@@ -73,7 +73,7 @@ class DeterminantalPointProcess(Module):
             # print("Logdet: {}".format(logdet.data))
         return logdet - self.log_normalizer
 
-    def sample(self):
+    def sample(self) -> th.LongTensor:
         # 1. Select elementary DPP
         probs = (self.w / (self.w + 1)).detach().numpy()
         index = uniform(size=self.N) <= probs
@@ -98,7 +98,7 @@ class DeterminantalPointProcess(Module):
         sample = th.LongTensor(J)
         return sample
 
-    def forward(self, x):
+    def forward(self, x) -> th.FloatTensor:
         # _ = self.v
         return self.log_prob(x)
 

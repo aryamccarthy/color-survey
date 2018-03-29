@@ -15,7 +15,7 @@ class DeterminantalPointProcess(Module):
     def __init__(self, L):
         super(DeterminantalPointProcess, self).__init__()
         assert (L == L.t()).all(), "L must be symmetric!"
-        self._log_L = Parameter(th.log(L))
+        self._log_L = th.log(L)  # Parameter(th.log(L))
         self.N = L.shape[0]
         # w, v = th.symeig(self.L, eigenvectors=True)
         # assert (w > 0).all(), "L must be positive definite."
@@ -41,9 +41,6 @@ class DeterminantalPointProcess(Module):
 
     @property
     def log_normalizer(self):
-        w, v = th.symeig(self.L, eigenvectors=True)
-        assert (w > 0).all(), "L must be positive definite."
-        
         log_normalizer = th.logdet(self.L + th.eye(self.N))
         return log_normalizer
 
@@ -65,15 +62,15 @@ class DeterminantalPointProcess(Module):
             return False
 
     def log_prob(self, x):
-        assert self.supported(x), f"You can't draw that from this DPP: {x}"
+        # assert self.supported(x), f"You can't draw that from this DPP: {x}"
         if len(x) == 0:
             logdet = th.log(th.Tensor([1]))
         else:
             coordinates = th.LongTensor(x)
             submatrix = self.L[coordinates][:, coordinates]
-            print("Submatrix: {}".format(submatrix.data.numpy()))
+            # print("Submatrix: {}".format(submatrix.data.numpy()))
             logdet = th.logdet(submatrix)
-            print("Logdet: {}".format(logdet.data))
+            # print("Logdet: {}".format(logdet.data))
         return logdet - self.log_normalizer
 
     def sample(self):
@@ -102,7 +99,7 @@ class DeterminantalPointProcess(Module):
         return sample
 
     def forward(self, x):
-        _ = self.v
+        # _ = self.v
         return self.log_prob(x)
 
 

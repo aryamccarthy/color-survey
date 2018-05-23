@@ -1,7 +1,7 @@
 import torch as th
+import torch.nn as nn
 
 from numpy import isclose
-from torch import nn
 
 th.manual_seed(1337)
 
@@ -11,8 +11,7 @@ def inv_tanh(x):
 
 
 def invert_our_diffeomorphism(sequential):
-    # W1 = sequential[0].weight
-
+    """Return inverse function of W2 @ tanh(W1 @ x + b1) + b2"""
     def unlinear(y, linear_layer):
         bias = linear_layer.bias
         weight = linear_layer.weight

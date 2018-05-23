@@ -1,16 +1,16 @@
 import numpy as np
 import torch as th
-from torch import nn
 
 from scipy.stats import multivariate_normal as mvn
+from torch import nn
 from torch.autograd import Variable
+
+
+from inverse_nn import invert_our_diffeomorphism
 
 th.random.manual_seed(1337)
 np.random.seed(1337)
 
-
-def mvn_rv(dim=3):
-    return mvn.rvs(np.zeros(dim))
 
 
 class ChromemesToColors(th.nn.modules.Module):
@@ -19,13 +19,14 @@ class ChromemesToColors(th.nn.modules.Module):
         super(ChromemesToColors, self).__init__()
         self.dim = dim
         self.mlp = nn.Sequential(
-                nn.Linear(3, 3),
-                nn.Tanh(),
-                nn.Linear(3, 3),
-            )
+            nn.Linear(3, 3),
+            nn.Tanh(),
+            nn.Linear(3, 3),
+        )
 
-    def loss(self, input, target):
-        return th.sum((input - target) ** 2)
+    @staticmethod
+    def loss(input_, target):
+        return th.sum((input_ - target) ** 2)
 
     def forward(self, prototypes, manifestations, alignment):
         colors = manifestations
@@ -61,6 +62,9 @@ def assert_invertible(tensor):
 
 
 if __name__ == '__main__':
+    def mvn_rv(dim=3):
+        return mvn.rvs(np.zeros(dim))
+
     spatial_dim = 3
     n_prototypes = 100
     n_manifestations = 20
@@ -118,7 +122,7 @@ if __name__ == '__main__':
                   [72, 90, 29, 36, 2, 63, 17, 99, 37, 47, 23, 91, 4, 85, 16, 9, 49, 11, 19, 42],
                   [72, 24, 0, 48, 43, 75, 10, 60, 67, 26, 23, 15, 4, 85, 16, 28, 98, 11, 19, 42],
                   [83, 24, 0, 48, 7, 29, 34, 60, 67, 80, 57, 38, 4, 85, 78, 28, 98, 59, 19, 11],
-                  ]
+                 ]
     model = ChromemesToColors(dim=spatial_dim)
     train_model(model, prototypes, manifestations, alignments)
     assert_invertible(model.mlp[0].weight.data)

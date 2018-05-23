@@ -1,12 +1,24 @@
 import numpy as np
+import torch as th
+
 from numpy.random import choice, rand
 from scipy.stats import multivariate_normal as mvn
+
+from torch.distributions import MultivariateNormal
+from tqdm import tqdm, trange
 
 np.random.seed(1337)
 
 
-def mvn_rv(dim=3):
-    return mvn.rvs(np.zeros(dim))
+def print(x):
+    tqdm.write(str(x))
+
+
+def mvn_rv(*, n_samples=1, dim=3):
+    mu = th.zeros(3)
+    cov = th.eye(3)
+    mvn = MultivariateNormal(loc=mu, covariance_matrix=cov)
+    return mvn.sample(th.Size([n_samples]))
 
 
 class AlignmentGibbsSampler(object):
@@ -40,11 +52,13 @@ class AlignmentGibbsSampler(object):
         p_r = mvn.pdf(self.V[k], self.U[r])
         return p_q - np.logaddexp(p_q, p_r)
 
-    def sample(self, max_iters):
+    def sample(self, draws, *, take_every_nth=1, progressbar=True, burn_in=1000):
         state = self.init_guess()
         # trace = []
 
-        for i in range(max_iters):
+        iter_method = trange if progressbar else range
+
+        for i in iter_method(1, 1 + draws * take_every_nth + burn_in):
 
             for k in range(self.n):
                 new_value = choice(self._unaligned(state))
@@ -52,7 +66,8 @@ class AlignmentGibbsSampler(object):
                 accept_logprob = self._log_ratio(k, new_value, old_value)
                 if np.log(rand()) < accept_logprob:
                     state[k] = new_value
-            yield state.copy()
+            if i % take_every_nth == 0 and i > burn_in:
+                yield state.copy()
             # trace.append(state.copy())
         # return trace
 
@@ -61,9 +76,9 @@ if __name__ == '__main__':
     n_prototypes = 100
     n_manifestations = 20
 
-    prototypes = [mvn_rv(3) for _ in range(n_prototypes)]
-    manifestations = [mvn_rv(3) for _ in range(n_manifestations)]
+    prototypes = mvn_rv(dim=3, n_samples=n_prototypes)
+    manifestations = mvn_rv(dim=3, n_samples=n_manifestations)
 
-    for state in AlignmentGibbsSampler(prototypes, manifestations).sample(50):
+    for state in AlignmentGibbsSampler(prototypes, manifestations).sample(50, take_every_nth=20):
         print(state)
         # print('[' + ", ".join(str(x) for x in state) + ']')

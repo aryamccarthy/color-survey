@@ -1,6 +1,11 @@
-import torch as th
+"""Doing the real things in the code"""
 #
-from math import factorial, log
+import argparse
+#
+import numpy as np
+import torch as th
+import torch.nn.functional as F
+#
 from random import sample
 #
 from numpy import isclose
@@ -18,9 +23,8 @@ from trainer import PyTorchTrainer
 DIM = 3
 SCALAR_DIM = 1
 
+MODEL = "dpp"
 
-
-import torch.nn.functional as F
 
 def logsumexp(inputs, dim=None, keepdim=False):
     return (inputs - F.log_softmax(inputs, dim=0)).mean(dim, keepdim=keepdim)
@@ -36,13 +40,13 @@ class CompleteModel(nn.Module):
         )
         self.diffeomorphism = nn.Sequential(
             nn.Linear(DIM, DIM),
-            nn.Tanh(),
-            nn.Linear(DIM, DIM)
+            # nn.Tanh(),
+            # nn.Linear(DIM, DIM)
         )
 
         self.λ = λ
         self.mus = nn.Parameter(th.randn(N, DIM))
-        print(self.diffeomorphism[0].weight)
+        # print(self.diffeomorphism[0].weight)
 
     def step1_logprob(self, μs):
         N = len(μs)
@@ -80,10 +84,14 @@ class CompleteModel(nn.Module):
         step2 = self.step2_logprob(self.mus)
         step34 = th.tensor(0.0)
 
-        print(th.det(self.diffeomorphism[0].weight))
-        print(th.det(self.diffeomorphism[-1].weight))
+        # print(th.det(self.diffeomorphism[0].weight))
+        # print(th.det(self.diffeomorphism[-1].weight))
 
-        L = LEnsembleFactory(self.focalization_kernel).make(self.mus)
+        LF = LEnsembleFactory(self.focalization_kernel)
+        if MODEL == "dpp":
+            L = LF.make(self.mus)
+        elif MODEL == "bpp":
+            L = LF.make_focalization_only(self.mus)
         dpp = DeterminantalPointProcess(L)
         color_to_chrome = invert_our_diffeomorphism(self.diffeomorphism)
 
@@ -111,18 +119,60 @@ def initial_alignment(N, n_l):
 def prepare_training_data(N):
     color_foci = get_color_data()
     one_speaker_only = [speakers[0] for speakers in color_foci]
-    alignments = [initial_alignment(N, len(inventory)) for inventory in one_speaker_only]
+    alignments = [initial_alignment(N, len(inventory))
+                  for inventory in one_speaker_only]
     return (one_speaker_only, alignments)
 
 
 def prepare_m_step_data(N):
     color_foci = get_color_data()
     one_speaker_only = [speakers[0] for speakers in color_foci]
-    alignments = [[initial_alignment(N, len(inventory)) for _ in range(5)] for inventory in one_speaker_only]
+    print(one_speaker_only)
+
+    just_color_triples = np.concatenate(one_speaker_only)
+    print(just_color_triples)
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.pipeline import Pipeline
+    whitener = Pipeline([
+        ('scl', StandardScaler()),
+        ('wht', PCA(whiten=True))
+    ])
+
+    whitened = list(whitener.fit_transform(np.array(just_color_triples)))
+
+    i = 0
+    for idx, inventory in enumerate(one_speaker_only[:]):
+        j = i + len(inventory)
+        print(i, j)
+        clean = whitened[i:j]
+        print(clean)
+        one_speaker_only[idx] = clean
+        assert len(clean) == j - i
+        i = j
+    print(one_speaker_only)
+
+    alignments = [[initial_alignment(N, len(inventory))
+                  for _ in range(5)]
+                  for inventory in one_speaker_only]
     return (one_speaker_only, alignments)
 
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    # If user doesn't specify an input file, read from standard input. Since
+    # encodings are the worst thing, we're explicitly expecting std
+    parser.add_argument("-m", "--model",
+                        default="dpp")
+    return parser.parse_args()
+
+
 def main():
+    global MODEL
+    args = parse_args()
+    assert args.model in {"dpp", "bpp"}
+    MODEL = args.model
     N = 50
     λ = 100
     data = prepare_m_step_data(N)
@@ -134,18 +184,15 @@ def main():
     def write(x):
         tqdm.write(str(x))
 
-    for i in trange(n_iters, desc="EM round"):
+    for _ in trange(n_iters, desc="EM round"):
         # alignments = perform_expectation_step(model, n_samples)
-        trainer = PyTorchTrainer(model, epochs=4)
+        trainer = PyTorchTrainer(model, epochs=100)
         # write(model.mus[0])
-        write(model.diffeomorphism[0].weight)
-        write(model.diffeomorphism[0].bias)
-        write(model.diffeomorphism[-1].weight)
-        write(model.diffeomorphism[-1].bias)
+        # write(model.diffeomorphism[0].weight)
+        # write(model.diffeomorphism[0].bias)
+        # write(model.diffeomorphism[-1].weight)
+        # write(model.diffeomorphism[-1].bias)
         trainer.train(data)
-
-
-
 
 
 if __name__ == '__main__':

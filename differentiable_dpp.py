@@ -43,6 +43,18 @@ class LEnsembleFactory(object):
         assert allclose(L.detach().numpy(), L.t().detach().numpy()), ("Did not produce a symmetric L!\n", L)
         return L
 
+    def make_focalization_only(self, μs, ρ=None):
+        if not ρ:
+            ρ = th.tensor(0.01)
+        N = len(μs)
+        L = th.zeros(N, N)
+        # for (i, μ), (j, μʹ) in product(enumerate(μs), repeat=2):
+        #     L[i, j] = self.kernel(μ, μʹ, ρ)
+        for i, μ in enumerate(μs):
+            L[i, i] += self.focalization(μ)[0]
+        assert allclose(L.detach().numpy(), L.t().detach().numpy()), ("Did not produce a symmetric L!\n", L)
+        return L
+
 
 class DeterminantalPointProcess(Module):
     """docstring for DeterminantalPointProcess"""

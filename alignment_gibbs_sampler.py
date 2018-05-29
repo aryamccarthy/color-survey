@@ -2,44 +2,52 @@ import numpy as np
 import torch as th
 
 from numpy.random import choice, rand
-from scipy.stats import multivariate_normal as mvn
+# from scipy.stats import multivariate_normal as mvn
 
 from torch.distributions import MultivariateNormal
+from torch import nn
 from tqdm import tqdm, trange
+
+from complete import prepare_m_step_data
+from inverse_nn import invert_our_diffeomorphism
 
 np.random.seed(1337)
 
 
-def print(x):
-    tqdm.write(str(x))
+DIM = 3
 
 
-def mvn_rv(*, n_samples=1, dim=3):
-    mu = th.zeros(3)
-    cov = th.eye(3)
+def print(*xs):
+    tqdm.write(" ".join([str(x) for x in xs]))
+
+
+def mvn_rv(*, n_samples=1, dim=DIM):
+    mu = th.zeros(dim)
+    cov = th.eye(dim)
     mvn = MultivariateNormal(loc=mu, covariance_matrix=cov)
     return mvn.sample(th.Size([n_samples]))
 
 
 class AlignmentGibbsSampler(object):
     """docstring for AlignmentGibbsSampler"""
-    def __init__(self, prototypes, manifestations):
+    def __init__(self, prototypes, manifestations, inverse_map):
         super(AlignmentGibbsSampler, self).__init__()
         N = len(prototypes)
         n = len(manifestations)
         assert n < N, f"Cannot align {n} to {N}."
-        self.prototypes = prototypes
-        self.manifestations = manifestations
+        self.chromemes = prototypes
+        self.colors = manifestations
+        self.chromes = [inverse_map(th.Tensor(c)).detach().numpy() for c in self.colors]
         self.N = N
         self.n = n
 
     @property
     def U(self):
-        return self.prototypes
+        return self.chromemes
 
     @property
     def V(self):
-        return self.manifestations
+        return self.chromes
 
     def init_guess(self):
         return choice(self.N, size=self.n, replace=False)
@@ -48,11 +56,14 @@ class AlignmentGibbsSampler(object):
         return np.array(list(set(range(self.N)) - set(state)))
 
     def _log_ratio(self, k, q, r):
-        p_q = mvn.pdf(self.V[k], self.U[q])
-        p_r = mvn.pdf(self.V[k], self.U[r])
-        return p_q - np.logaddexp(p_q, p_r)
+        mvn_q = MultivariateNormal(loc=self.U[q], covariance_matrix=th.eye(DIM))
+        mvn_r = MultivariateNormal(loc=self.U[r], covariance_matrix=th.eye(DIM))
+        p_q_log = mvn_q.log_prob(self.V[k])
+        p_r_log = mvn_r.log_prob(self.V[k])
+        p_q_log, p_r_log = p_q_log.detach().numpy(), p_r_log.detach().numpy()
+        return p_q_log - np.logaddexp(p_q_log, p_r_log)
 
-    def sample(self, draws, *, take_every_nth=1, progressbar=True, burn_in=1000):
+    def sample(self, draws, *, take_every_nth=1, progressbar=True, burn_in=0):
         state = self.init_guess()
         # trace = []
 
@@ -76,9 +87,25 @@ if __name__ == '__main__':
     n_prototypes = 100
     n_manifestations = 20
 
-    prototypes = mvn_rv(dim=3, n_samples=n_prototypes)
-    manifestations = mvn_rv(dim=3, n_samples=n_manifestations)
+    diffeomorphism = nn.Sequential(
+        nn.Linear(DIM, DIM)
+        )
+    inverted = invert_our_diffeomorphism(diffeomorphism)
 
-    for state in AlignmentGibbsSampler(prototypes, manifestations).sample(50, take_every_nth=20):
-        print(state)
-        # print('[' + ", ".join(str(x) for x in state) + ']')
+    one_speaker_only, _ = prepare_m_step_data(n_prototypes)
+    prototypes = mvn_rv(dim=DIM, n_samples=n_prototypes)
+
+    samplers = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in one_speaker_only]
+    for sampler in samplers:
+        # Burn in
+        sampler.sample(0, burn_in=1000)
+
+    language_samples = []
+    for sampler in samplers:
+        # print(inventory)
+        language_samples.append([])
+        for state in sampler.sample(5, take_every_nth=20):
+            language_samples[-1].append(state)
+    for language in language_samples:
+        print(language)
+

@@ -20,6 +20,7 @@ from tqdm import tqdm, trange
 from differentiable_dpp import DeterminantalPointProcess, LEnsembleFactory
 from inverse_nn import invert_our_diffeomorphism
 from read_data import get_color_data
+from sampler import AlignmentGibbsSampler
 from trainer import PyTorchTrainer
 
 
@@ -27,6 +28,10 @@ DIM = 3
 SCALAR_DIM = 1
 
 MODEL = "dpp"
+
+
+def write(*xs):
+    tqdm.write(" ".join([str(x) for x in xs]))
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
@@ -115,10 +120,24 @@ def initial_alignment(N, n_l):
 def prepare_training_data(N):
     color_foci = get_color_data()
     one_speaker_only = [speakers[0] for speakers in color_foci]
-    alignments = [initial_alignment(N, len(inventory))
-                  for inventory in one_speaker_only]
-    return (one_speaker_only, alignments)
 
+    just_color_triples = np.concatenate(one_speaker_only)
+    whitener = Pipeline([
+        ('scl', StandardScaler()),
+        ('wht', PCA(whiten=True))
+    ])
+    whitened = list(whitener.fit_transform(np.array(just_color_triples)))
+
+    i = 0
+    for idx, inventory in enumerate(one_speaker_only[:]):
+        j = i + len(inventory)
+        clean = whitened[i:j]
+        one_speaker_only[idx] = clean
+        assert len(clean) == j - i
+        i = j
+    assert j == len(whitened)
+
+    return one_speaker_only
 
 def prepare_m_step_data(N):
     color_foci = get_color_data()
@@ -165,18 +184,31 @@ def main():
     MODEL = args.model
     N = 50
     λ = 100
-    data = prepare_m_step_data(N)
-    print(data[1][1])
+    data = prepare_training_data(N)  # prepare_m_step_data(N)
     model = CompleteModel(λ=λ, N=N)
     n_iters = 5
     n_samples = 10
 
-    def write(x):
-        tqdm.write(str(x))
+    prototypes = model.mus.detach().numpy()
+    inverted = invert_our_diffeomorphism(model.diffeomorphism)
+
+    samplers = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data]
 
     for _ in trange(n_iters, desc="EM round"):
-        trainer = PyTorchTrainer(model, epochs=100)
-        trainer.train(data)
+        # E-step
+        all_alignments = []
+        for sampler in tqdm(samplers, desc="Language"):
+            all_alignments.append([])
+            for state in sampler.sample(n_samples, take_every_nth=20, burn_in=1000):
+                all_alignments[-1].append(list(state))
+
+        # M-step
+        trainer = PyTorchTrainer(model, epochs=20)
+        trainer.train((data, all_alignments))
+
+        # update sampler's prototypes
+        for sampler in samplers:
+            sampler.chromemes = model.mus.detach()
 
 
 if __name__ == '__main__':

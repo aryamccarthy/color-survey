@@ -19,16 +19,19 @@ def invert_our_diffeomorphism(sequential):
         return (y - bias) @ weight.inverse().t()
 
     def my_function(y):
-        # x = unlinear(
-        #         inv_tanh(
-        #             unlinear(y,
-        #                      sequential[-1]
-        #                      )
-        #             ),
-        #         sequential[0]
-        #         )
-        x = unlinear(y, sequential[0])
-
+        if len(sequential) == 3:
+            x = unlinear(
+                    inv_tanh(
+                        unlinear(y,
+                                 sequential[-1]
+                                 )
+                        ),
+                    sequential[0]
+                    )
+        elif len(sequential) == 1:
+            x = unlinear(y, sequential[0])
+        else:
+            raise ValueError("What kind of diffeomorphism did you make?")
         return x
     return my_function
 

@@ -9,6 +9,9 @@ import torch.nn.functional as F
 from random import sample
 #
 from numpy import isclose
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from torch import nn
 from torch.distributions import MultivariateNormal
 from torch.distributions import Poisson
@@ -46,7 +49,6 @@ class CompleteModel(nn.Module):
 
         self.λ = λ
         self.mus = nn.Parameter(th.randn(N, DIM))
-        # print(self.diffeomorphism[0].weight)
 
     def step1_logprob(self, μs):
         N = len(μs)
@@ -65,16 +67,13 @@ class CompleteModel(nn.Module):
         return dpp.log_prob(alignment)
 
     def step4_logprob(self, μs, alignment, inventory, color_to_chrome):
-        #print(inventory)
         chromes = [color_to_chrome(color) for color in inventory]
-        #print(chromes)
         chromemes = list(μs[alignment])
         log_prob = th.tensor(0.)
         assert len(chromes) == len(chromemes)
         for chrome, chromeme in zip(chromes, chromemes):
             mvn = MultivariateNormal(chromeme, th.eye(DIM))
             result = mvn.log_prob(chrome)
-            # print(chrome.detach().numpy(), chromeme.detach().numpy(), result)
             log_prob += result
         return log_prob
 
@@ -83,9 +82,6 @@ class CompleteModel(nn.Module):
         step1 = self.step1_logprob(self.mus)
         step2 = self.step2_logprob(self.mus)
         step34 = th.tensor(0.0)
-
-        # print(th.det(self.diffeomorphism[0].weight))
-        # print(th.det(self.diffeomorphism[-1].weight))
 
         LF = LEnsembleFactory(self.focalization_kernel)
         if MODEL == "dpp":
@@ -127,13 +123,9 @@ def prepare_training_data(N):
 def prepare_m_step_data(N):
     color_foci = get_color_data()
     one_speaker_only = [speakers[0] for speakers in color_foci]
-    print(one_speaker_only)
 
     just_color_triples = np.concatenate(one_speaker_only)
-    print(just_color_triples)
-    from sklearn.decomposition import PCA
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.pipeline import Pipeline
+
     whitener = Pipeline([
         ('scl', StandardScaler()),
         ('wht', PCA(whiten=True))
@@ -144,13 +136,11 @@ def prepare_m_step_data(N):
     i = 0
     for idx, inventory in enumerate(one_speaker_only[:]):
         j = i + len(inventory)
-        print(i, j)
         clean = whitened[i:j]
-        print(clean)
         one_speaker_only[idx] = clean
         assert len(clean) == j - i
         i = j
-    print(one_speaker_only)
+    assert j == len(whitened), (i, j, len(whitened))
 
     alignments = [[initial_alignment(N, len(inventory))
                   for _ in range(5)]
@@ -185,13 +175,7 @@ def main():
         tqdm.write(str(x))
 
     for _ in trange(n_iters, desc="EM round"):
-        # alignments = perform_expectation_step(model, n_samples)
         trainer = PyTorchTrainer(model, epochs=100)
-        # write(model.mus[0])
-        # write(model.diffeomorphism[0].weight)
-        # write(model.diffeomorphism[0].bias)
-        # write(model.diffeomorphism[-1].weight)
-        # write(model.diffeomorphism[-1].bias)
         trainer.train(data)
 
 

@@ -174,6 +174,8 @@ def parse_args():
     # encodings are the worst thing, we're explicitly expecting std
     parser.add_argument("-m", "--model",
                         default="dpp")
+    parser.add_argument("-N", "--num_prototypes",
+                        type=int, default=50)
     return parser.parse_args()
 
 
@@ -182,7 +184,7 @@ def main():
     args = parse_args()
     assert args.model in {"dpp", "bpp"}
     MODEL = args.model
-    N = 50
+    N = args.num_prototypes
     λ = 100
     data = prepare_training_data(N)  # prepare_m_step_data(N)
     model = CompleteModel(λ=λ, N=N)
@@ -194,15 +196,18 @@ def main():
 
     samplers = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data]
 
-    for _ in trange(n_iters, desc="EM round"):
+    for i in trange(n_iters, desc="EM round"):
         # E-step
+        write("E-step")
+        burn_in = 1000 if i == 0 else 0
         all_alignments = []
         for sampler in tqdm(samplers, desc="Language"):
             all_alignments.append([])
-            for state in sampler.sample(n_samples, take_every_nth=20, burn_in=1000):
+            for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
                 all_alignments[-1].append(list(state))
 
         # M-step
+        write("M-step")
         trainer = PyTorchTrainer(model, epochs=20)
         trainer.train((data, all_alignments))
 

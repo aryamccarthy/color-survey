@@ -1,6 +1,9 @@
 # pylint: disable=missing-docstring,invalid-name
 from itertools import product
+import logging
 from math import pi as π
+
+from pathlib import Path
 
 from numpy import allclose
 
@@ -11,6 +14,10 @@ from torch.nn import Module
 
 
 DIM = 3
+
+
+log = logging.getLogger(Path(__file__).stem)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class LEnsembleFactory(object):
@@ -32,6 +39,7 @@ class LEnsembleFactory(object):
         return th.exp(self.focalizer(μ))
 
     def make(self, μs, ρ=None):
+        # log.info("Using DPP with dispersion and focalization")
         if not ρ:
             ρ = th.tensor(0.01)
         N = len(μs)
@@ -44,6 +52,7 @@ class LEnsembleFactory(object):
         return L
 
     def make_focalization_only(self, μs, ρ=None):
+        # log.info("Using BPP with focalization")
         if not ρ:
             ρ = th.tensor(0.01)
         N = len(μs)

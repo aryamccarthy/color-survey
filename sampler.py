@@ -53,7 +53,10 @@ class AlignmentGibbsSampler(object):
             return self.chromes
 
     def init_guess(self):
-        return choice(self.N, size=self.n, replace=False)
+        try:
+            return self.state
+        except AttributeError:
+            return choice(self.N, size=self.n, replace=False)
 
     def _unaligned(self, state):
         return np.array(list(set(range(self.N)) - set(state)))
@@ -84,6 +87,7 @@ class AlignmentGibbsSampler(object):
                 accept_logprob = self._log_ratio(k, new_value, old_value)
                 if np.log(rand()) < accept_logprob:
                     state[k] = new_value
+            self.state = state
             if i % take_every_nth == 0 and i > burn_in:
                 yield state.copy()
             # trace.append(state.copy())

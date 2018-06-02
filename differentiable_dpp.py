@@ -38,29 +38,21 @@ class LEnsembleFactory(object):
     def focalization(self, μ):
         return th.exp(self.focalizer(μ))
 
-    def make(self, μs, ρ=None):
+    def make(self, μs, use_dispersion=True, ρ=None):
         # log.info("Using DPP with dispersion and focalization")
         if not ρ:
             ρ = th.tensor(0.01)
         N = len(μs)
-        L = th.zeros(N, N)
-        for (i, μ), (j, μʹ) in product(enumerate(μs), repeat=2):
-            L[i, j] = self.kernel(μ, μʹ, ρ)
+        focalization = th.zeros(N)
         for i, μ in enumerate(μs):
-            L[i, i] += self.focalization(μ)[0]
-        assert allclose(L.detach().numpy(), L.t().detach().numpy()), ("Did not produce a symmetric L!\n", L)
-        return L
-
-    def make_focalization_only(self, μs, ρ=None):
-        # log.info("Using BPP with focalization")
-        if not ρ:
-            ρ = th.tensor(0.01)
-        N = len(μs)
-        L = th.zeros(N, N)
-        # for (i, μ), (j, μʹ) in product(enumerate(μs), repeat=2):
-        #     L[i, j] = self.kernel(μ, μʹ, ρ)
-        for i, μ in enumerate(μs):
-            L[i, i] += self.focalization(μ)[0]
+            focalization[i] = self.focalization(μ)
+        if use_dispersion:
+            dispersion = th.zeros(N, N)
+            for (i, μ), (j, μʹ) in product(enumerate(μs), repeat=2):
+                dispersion[i, j] = self.kernel(μ, μʹ, ρ)
+            L = dispersion + th.diag(focalization)
+        else:
+            L = th.diag(focalization)
         assert allclose(L.detach().numpy(), L.t().detach().numpy()), ("Did not produce a symmetric L!\n", L)
         return L
 

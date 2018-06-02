@@ -43,5 +43,5 @@ class PyTorchTrainer(object):
                 tqdm.write(f'\r\ttrained for {iteration} iterations, loss {running_loss / iteration} '
                            f'{int(done*100)}% time: {int((now - start) / 60)}/{int(total_time / 60)} (min)  ') 
             if self._evaluate:
-                tqdm.write('\n')
+                # tqdm.write('\n')
                 self._evaluate(self._model)

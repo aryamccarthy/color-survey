@@ -65,10 +65,9 @@ class AlignmentGibbsSampler(object):
         U_q = th.Tensor(self.U[q])
         U_r = th.Tensor(self.U[r])
         V_k = th.Tensor(self.V[k])
-        mvn_q = MultivariateNormal(loc=U_q, covariance_matrix=th.eye(DIM))
-        mvn_r = MultivariateNormal(loc=U_r, covariance_matrix=th.eye(DIM))
-        p_q_log = mvn_q.log_prob(V_k)
-        p_r_log = mvn_r.log_prob(V_k)
+        mvn = MultivariateNormal(loc=V_k, covariance_matrix=th.eye(DIM))
+        p_q_log = mvn.log_prob(U_q)
+        p_r_log = mvn.log_prob(U_r)
         p_q_log, p_r_log = p_q_log.detach().numpy(), p_r_log.detach().numpy()
         return p_q_log - np.logaddexp(p_q_log, p_r_log)
 

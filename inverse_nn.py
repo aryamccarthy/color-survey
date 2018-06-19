@@ -2,8 +2,15 @@ import torch as th
 import torch.nn as nn
 
 from numpy import allclose
+from tqdm import tqdm
 
 th.manual_seed(1337)
+
+
+
+def print(*xs):
+    tqdm.write(" ".join([str(x) for x in xs]))
+
 
 
 def inv_tanh(x):
@@ -19,19 +26,18 @@ def invert_our_diffeomorphism(sequential):
         return (y - bias) @ weight.inverse().t()
 
     def my_function(y):
-        if len(sequential) == 3:
-            x = unlinear(
-                    inv_tanh(
-                        unlinear(y,
-                                 sequential[-1]
-                                 )
-                        ),
-                    sequential[0]
-                    )
-        elif len(sequential) == 1:
-            x = unlinear(y, sequential[0])
-        else:
-            raise ValueError("What kind of diffeomorphism did you make?")
+        print("y: ", y)
+        for i, layer in enumerate(reversed(sequential)):
+            if isinstance(layer, th.nn.Linear):
+                y = unlinear(y, layer)
+            elif isinstance(layer, th.nn.Tanh):
+                y = inv_tanh(y)
+            else:
+                raise ValueError("What kind of diffeomorphism did you make?!")
+            assert not th.isnan(y).any()
+            print(f"l{i}", y)
+        x = y
+        print("x: ", x)
         return x
     return my_function
 

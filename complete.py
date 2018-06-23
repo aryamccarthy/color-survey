@@ -91,9 +91,9 @@ class CompleteModel(nn.Module):
         return dpp.log_prob(alignment)
 
     def step4_logprob(self, μs, alignment, inventory, color_to_chrome):
-        print("Inventory: ", inventory)
+        # print("Inventory: ", inventory)
         chromes = [color_to_chrome(color) for color in inventory]
-        print("Chromes: ", inventory)
+        # print("Chromes: ", inventory)
         chromemes = list(μs[alignment])
         log_prob = th.tensor(0.)
         assert len(chromes) == len(chromemes)
@@ -224,35 +224,35 @@ def main():
     N = args.num_prototypes
     λ = 100
     data_train, data_dev, data_test = prepare_training_data(N)  # prepare_m_step_data(N)
-    data_train = data_train[:1]  # CHANGE
-    data_dev = data_dev[:1]  # CHANGE
+    data_train = data_train  # CHANGE
+    data_dev = data_dev  # CHANGE
     model = CompleteModel(λ=λ, N=N)
-    n_iters = 5
+    n_iters = 10
     n_samples = 10
 
     prototypes = model.mus.detach().numpy()
     inverted = invert_our_diffeomorphism(model.diffeomorphism)
 
-    samplers_train = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_train][:1]  # CHANGE
-    samplers_dev = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_dev][:1]  # CHANGE
+    samplers_train = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_train]  # CHANGE
+    samplers_dev = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_dev]  # CHANGE
 
-    print(list(model.named_parameters()))
+    # print(list(model.named_parameters()))
 
     for i in trange(n_iters, desc="EM round"):
         # E-step
-        if i == 0:  # CHANGE
+        if i == i:  # CHANGE
             write(f"E-step {i}")
-            burn_in = 0 if i == 0 else 0
+            burn_in = 100 if i == 0 else 0
             alignments_train = []
             for sampler in tqdm(samplers_train, desc="Language"):
                 alignments_train.append([])
-                for state in sampler.sample(n_samples, take_every_nth=2, burn_in=burn_in):
+                for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
                     alignments_train[-1].append(list(state))
     
             alignments_dev = []
             for sampler in samplers_dev:
                 alignments_dev.append([])
-                for state in sampler.sample(n_samples, take_every_nth=2, burn_in=burn_in):
+                for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
                     alignments_dev[-1].append(list(state))
 
         # M-step

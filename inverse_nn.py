@@ -27,7 +27,7 @@ def invert_our_diffeomorphism(sequential):
         return (y - bias) @ weight.inverse().t()
 
     def my_function(y):
-        print("y: ", y)
+        # print("y: ", y)
         for i, layer in enumerate(reversed(sequential)):
             if isinstance(layer, th.nn.Linear):
                 y = unlinear(y, layer)
@@ -36,9 +36,9 @@ def invert_our_diffeomorphism(sequential):
             else:
                 raise ValueError("What kind of diffeomorphism did you make?!")
             assert not th.isnan(y).any()
-            print(f"l{i}: ", y)
+            # print(f"l{i}: ", y)
         x = y
-        print("x: ", x)
+        # print("x: ", x)
         return x
     return my_function
 

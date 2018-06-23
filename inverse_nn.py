@@ -15,7 +15,8 @@ def print(*xs):
 
 def inv_tanh(x):
     """The inverse of the tanh function."""
-    return (1 / 2) * th.log((1 + x) / (1 - x))
+    return (th.log1p(x) - th.log1p(-x)) / 2
+    # return (1 / 2) * th.log((1 + x) / (1 - x))
 
 
 def invert_our_diffeomorphism(sequential):
@@ -35,7 +36,7 @@ def invert_our_diffeomorphism(sequential):
             else:
                 raise ValueError("What kind of diffeomorphism did you make?!")
             assert not th.isnan(y).any()
-            print(f"l{i}", y)
+            print(f"l{i}: ", y)
         x = y
         print("x: ", x)
         return x

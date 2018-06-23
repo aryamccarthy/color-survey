@@ -13,7 +13,7 @@ class PyTorchTrainer(object):
         if optimizer is None:
             # create an optimizer with the default settings
             # model.parameters() is a list of all the trainable parameters in the model
-            optimizer = th.optim.Adam(self._model.diffeomorphism.parameters(), lr=0.01)
+            optimizer = th.optim.Adam(self._model.parameters(), lr=0.01)
         self._optimizer = optimizer
         self._epochs = epochs
         self._evaluate = evaluate

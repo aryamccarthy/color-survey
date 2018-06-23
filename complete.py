@@ -57,8 +57,8 @@ class CompleteModel(nn.Module):
             nn.Tanh(),
             nn.Linear(DIM, DIM)
         )
-        self.diffeomorphism[0].weight.data = th.eye(DIM)
         self.diffeomorphism[-1].weight.data = th.eye(DIM)
+        # self.diffeomorphism[-1].weight.data = th.eye(DIM)
 
         self.λ = λ
         mus = self.init_prototypes(N)
@@ -163,7 +163,7 @@ def fit(whitener, inventories):
 
 def transform(whitener, inventories):
     triples = np.concatenate(inventories)
-    triples_whitened = list(whitener.transform(triples) / 100)
+    triples_whitened = list(whitener.transform(triples) / 1000)
 
     # Merge triples back into inventories.
     i = 0

@@ -26,6 +26,15 @@ from sampler import AlignmentGibbsSampler
 from trainer import PyTorchTrainer
 
 
+
+# Evidently Matplotlib 3.0.0 has decided to frustrate me.
+import logging
+mpl = logging.getLogger('matplotlib')
+# set WARNING for Matplotlib
+mpl.setLevel(logging.WARNING)
+
+
+
 DIM = 3
 SCALAR_DIM = 1
 
@@ -34,6 +43,10 @@ MODEL = "dpp"
 
 def write(*xs):
     tqdm.write(" ".join([str(x) for x in xs]))
+
+
+def print(*xs):
+    write(*xs)
 
 
 def logsumexp(inputs, dim=None, keepdim=False):
@@ -50,9 +63,11 @@ class CompleteModel(nn.Module):
         )
         self.diffeomorphism = nn.Sequential(
             nn.Linear(DIM, DIM),
-            # nn.Tanh(),
-            # nn.Linear(DIM, DIM)
+            nn.Tanh(),
+            nn.Linear(DIM, DIM)
         )
+        self.diffeomorphism[-1].weight.data = th.eye(DIM)
+        # self.diffeomorphism[-1].weight.data = th.eye(DIM)
 
         self.λ = λ
         mus = self.init_prototypes(N)
@@ -85,7 +100,9 @@ class CompleteModel(nn.Module):
         return dpp.log_prob(alignment)
 
     def step4_logprob(self, μs, alignment, inventory, color_to_chrome):
+        # print("Inventory: ", inventory)
         chromes = [color_to_chrome(color) for color in inventory]
+        # print("Chromes: ", inventory)
         chromemes = list(μs[alignment])
         log_prob = th.tensor(0.)
         assert len(chromes) == len(chromemes)
@@ -145,7 +162,7 @@ class CompleteModel(nn.Module):
 
 def train_dev_test(data):
     length = len(data)
-    split1, split2 = int(0.75 * length), int(0.875 * length)
+    split1, split2 = int(0.875 * length), int(0.99 * length)# int(0.75 * length), int(0.875 * length)
     train, dev, test = data[:split1], data[split1:split2], data[split2:]
     return train, dev, test
 
@@ -155,7 +172,7 @@ def fit(whitener, inventories):
 
 def transform(whitener, inventories):
     triples = np.concatenate(inventories)
-    triples_whitened = list(whitener.transform(triples))
+    triples_whitened = list(whitener.transform(triples) / 1000)
 
     # Merge triples back into inventories.
     i = 0
@@ -216,31 +233,36 @@ def main():
     N = args.num_prototypes
     λ = 100
     data_train, data_dev, data_test = prepare_training_data(N)  # prepare_m_step_data(N)
+    data_train = data_train  # CHANGE
+    data_dev = data_dev  # CHANGE
     model = CompleteModel(λ=λ, N=N)
-    n_iters = 5
+    n_iters = 10
     n_samples = 10
 
     prototypes = model.mus.detach().numpy()
     inverted = invert_our_diffeomorphism(model.diffeomorphism)
 
-    samplers_train = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_train]
-    samplers_dev = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_dev]
+    samplers_train = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_train]  # CHANGE
+    samplers_dev = [AlignmentGibbsSampler(prototypes, inventory, inverted) for inventory in data_dev]  # CHANGE
+
+    # print(list(model.named_parameters()))
 
     for i in trange(n_iters, desc="EM round"):
         # E-step
-        write(f"E-step {i}")
-        burn_in = 100 if i == 0 else 0
-        alignments_train = []
-        for sampler in tqdm(samplers_train, desc="Language"):
-            alignments_train.append([])
-            for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
-                alignments_train[-1].append(list(state))
-
-        alignments_dev = []
-        for sampler in samplers_dev:
-            alignments_dev.append([])
-            for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
-                alignments_dev[-1].append(list(state))
+        with th.no_grad():
+            write(f"E-step {i}")
+            burn_in = 100 if i == 0 else 0
+            alignments_train = []
+            for sampler in tqdm(samplers_train, desc="Language"):
+                alignments_train.append([])
+                for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
+                    alignments_train[-1].append(list(state))
+    
+            alignments_dev = []
+            for sampler in samplers_dev:
+                alignments_dev.append([])
+                for state in sampler.sample(n_samples, take_every_nth=20, burn_in=burn_in):
+                    alignments_dev[-1].append(list(state))
 
         # M-step
         write(f"M-step {i}")

@@ -13,7 +13,7 @@ class PyTorchTrainer(object):
         if optimizer is None:
             # create an optimizer with the default settings
             # model.parameters() is a list of all the trainable parameters in the model
-            optimizer = th.optim.Adam(self._model.parameters(), lr=0.1)
+            optimizer = th.optim.Adam(self._model.parameters(), lr=0.01)
         self._optimizer = optimizer
         self._epochs = epochs
         self._evaluate = evaluate
@@ -24,6 +24,9 @@ class PyTorchTrainer(object):
         dataset = list(dataset)
         running_loss = 0
         start = time.time()
+        if self._evaluate:
+            with th.no_grad():
+                self._evaluate(self._model)
         for _ in trange(self._epochs, desc='Epoch'):
             # compute the loss from the model (trainable decision agent)
             loss, *_ = self._model(dataset)
@@ -44,4 +47,5 @@ class PyTorchTrainer(object):
                            f'{int(done*100)}% time: {int((now - start) / 60)}/{int(total_time / 60)} (min)  ') 
             if self._evaluate:
                 # tqdm.write('\n')
-                self._evaluate(self._model)
+                with th.no_grad():
+                    self._evaluate(self._model)

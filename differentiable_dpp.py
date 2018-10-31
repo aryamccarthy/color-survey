@@ -17,7 +17,7 @@ DIM = 3
 
 
 log = logging.getLogger(Path(__file__).stem)
-logging.basicConfig(level=logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 
 class LEnsembleFactory(object):

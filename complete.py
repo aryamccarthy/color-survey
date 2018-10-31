@@ -26,6 +26,15 @@ from sampler import AlignmentGibbsSampler
 from trainer import PyTorchTrainer
 
 
+
+# Evidently Matplotlib 3.0.0 has decided to frustrate me.
+import logging
+mpl = logging.getLogger('matplotlib')
+# set WARNING for Matplotlib
+mpl.setLevel(logging.WARNING)
+
+
+
 DIM = 3
 SCALAR_DIM = 1
 
@@ -153,7 +162,7 @@ class CompleteModel(nn.Module):
 
 def train_dev_test(data):
     length = len(data)
-    split1, split2 = int(0.75 * length), int(0.875 * length)
+    split1, split2 = int(0.875 * length), int(0.99 * length)# int(0.75 * length), int(0.875 * length)
     train, dev, test = data[:split1], data[split1:split2], data[split2:]
     return train, dev, test
 
@@ -240,7 +249,7 @@ def main():
 
     for i in trange(n_iters, desc="EM round"):
         # E-step
-        if i == i:  # CHANGE
+        with th.no_grad():
             write(f"E-step {i}")
             burn_in = 100 if i == 0 else 0
             alignments_train = []
